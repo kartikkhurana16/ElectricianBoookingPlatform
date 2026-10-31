@@ -20,17 +20,13 @@ app.get("/",(req,res)=>{
 import userRouter from "./routes/user.route.js"
 app.use("/api/v1/users", userRouter);  // http://localhost:8000/api/v1/users/register
 
-app.use((err,req,res,next)=>{
-    const statusCode=err.statusCode || 500;
-    return res.status(statusCode).json({
-        statusCode,
-        success:false,
-        message:err.message || "Internal Server Error",
-        error:err.error || []
-    })
-})
+
 import electricianRouter from "./routes/electricia.route.js"
 app.use("/api/v1/electrician", electricianRouter);  // http://localhost:8000/api/v1/electrician/register
+
+import adminRouter from "./routes/admin.route.js"
+app.use("/api/v1/admin", adminRouter);  // http://localhost:8000/api/v1/admin/register
+
 
 app.use((err,req,res,next)=>{
     const statusCode=err.statusCode || 500;

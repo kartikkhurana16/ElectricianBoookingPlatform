@@ -1,5 +1,6 @@
 import { User } from "../model/auth/user.auth.model.js";
 import { Electrician } from "../model/auth/electrician.auth.model.js"
+import { Admin } from "../model/auth/admin.auth.model.js"
 
 import { ApiError } from "../utils/ApiError.js";
 import asyncHandler from "../utils/asyncHandler.js";
@@ -8,6 +9,7 @@ import jwt from "jsonwebtoken";
 const MODEL_BY_ROLE = {
     customer: User,
     electrician: Electrician,
+    admin: Admin,
 };
 
 export const verifyJWT = asyncHandler(async (req, res, next) => {
