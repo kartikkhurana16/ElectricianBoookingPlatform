@@ -11,6 +11,7 @@ import {
 
 } from "../controller/auth/admin.controller.js"
 import { verifyJWT ,allowRoles} from "../middleware/auth.middleware.js";
+import { saveAdminProfile } from "../controller/Profile/admin.profile.js"
 
 const adminRouter=Router();
 
@@ -22,6 +23,8 @@ adminRouter.route("/current-user").get(verifyJWT, allowRoles("admin"), getCurren
 adminRouter.route("/refresh-token").post(refreshAdminToken);
 adminRouter.route("/forgot-password").post(adminForgotPassword);
 adminRouter.route("/reset-password").post(adminResetPassword);
+
+adminRouter.route("/admin-profile").post(verifyJWT, allowRoles("admin"), saveAdminProfile)
 
 
 export default adminRouter;
