@@ -1,9 +1,10 @@
-import { User } from "../model/user.model.js";
+import { User } from "../model/auth/user.auth.model.js";
+import { UserProfile } from "../model/Profile/userProfile.model.js";
 import { ApiError } from "../utils/ApiError.js";
 import { ApiResponse } from "../utils/ApiResponse.js";
 import cookieParser from "cookie-parser";
 import asyncHandler from "../utils/asyncHandler.js"
-import { Verification } from "../model/OTP_verification.model.js";
+import { Verification } from "../model/auth/OTP_verification.model.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
 import { sendEmail } from "../utils/sendEmail.js";
@@ -59,12 +60,19 @@ const userRegister = asyncHandler(async (req, res) => {
     }
 
     const user = await User.create({
-        fullName,
         email: normalizedEmail,
         phoneNumber,
-        password,
-        role: "customer"
+        password
     });
+
+    let profile;
+    try {
+        profile = await UserProfile.create({ auth: user._id, fullName });
+    } catch (error) {
+        // don't leave a login without a profile
+        await User.deleteOne({ _id: user._id });
+        throw error;
+    }
 
     const registeredUser = await User.findById(user._id)
         .select("-password -refreshToken");
@@ -72,7 +80,7 @@ const userRegister = asyncHandler(async (req, res) => {
     return res.status(201).json(
         new ApiResponse(
             201,
-            registeredUser,
+            { user: registeredUser, profile },
             "User registered successfully"
         )
     );
@@ -101,6 +109,7 @@ const userLogin=asyncHandler(async(req,res)=>{
     const {accessToken,refreshToken}=await generateAccessAndRefereshToken(user._id);
 
     const loggedInUser=await User.findById(user._id).select("-password -refreshToken")
+    const profile=await UserProfile.findOne({auth:user._id})
 
     const options={
         httpOnly:true,
@@ -112,7 +121,8 @@ const userLogin=asyncHandler(async(req,res)=>{
                 .cookie("refreshToken",refreshToken,options)
                 .json(new ApiResponse(200,
                     {
-                        user:loggedInUser
+                        user:loggedInUser,
+                        profile
                     },
                     "user logined in successfully"
                 ))
@@ -192,9 +202,10 @@ const refreshTokenAccess = asyncHandler(async (req, res) => {
 })
 
 const getCurrentUser=asyncHandler(async(req,res)=>{
+    const profile=await UserProfile.findOne({auth:req.user._id})
     return res
     .status(200)
-    .json(new ApiResponse(200 ,req.user,"current user fetched succesfully"))
+    .json(new ApiResponse(200 ,{user:req.user,profile},"current user fetched succesfully"))
 })
 
 const forgotPassword = asyncHandler(async (req, res) => {

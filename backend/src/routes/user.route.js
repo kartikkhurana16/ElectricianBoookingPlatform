@@ -10,19 +10,17 @@ import {
     resetPassword
 
 } from "../controller/user.controller.js"
-import { verifyJWT } from "../middleware/auth.middleware.js";
+import { verifyJWT ,allowRoles} from "../middleware/auth.middleware.js";
 
-const router=Router();
+const userRouter=Router();
 
-router.route("/register").post(userRegister);
-router.route("/login").post(userLogin);
-router.route("/logout").post(verifyJWT,userLogout);
-router.route("/change-password").patch(verifyJWT,changeUserPassword);
-router.route("/refresh-token").post(refreshTokenAccess);
-router.route("/current-user").get(verifyJWT,getCurrentUser);
-router.route("/forgot-password").post(forgotPassword);
-router.route("/reset-password").post(resetPassword);
+userRouter.route("/register").post(userRegister);
+userRouter.route("/login").post(userLogin);
+userRouter.route("/logout").post(verifyJWT, allowRoles("customer"), userLogout);
+userRouter.route("/change-password").patch(verifyJWT, allowRoles("customer"), changeUserPassword);
+userRouter.route("/current-user").get(verifyJWT, allowRoles("customer"), getCurrentUser);
+userRouter.route("/refresh-token").post(refreshTokenAccess);
+userRouter.route("/forgot-password").post(forgotPassword);
+userRouter.route("/reset-password").post(resetPassword);
 
-
-
-export default router;
+export default userRouter;

@@ -2,13 +2,8 @@ import mongoose from "mongoose";
 import bcrypt from "bcrypt"
 import jwt from "jsonwebtoken"
 
+// Customer login credentials only. Name, avatar etc. live in UserProfile.
 const userSchema = new mongoose.Schema({
-    fullName:{
-        type:String,
-        required:true,
-        trim:true,
-        index:true
-    },
     email: {
       type: String,
       lowercase: true,
@@ -21,51 +16,31 @@ const userSchema = new mongoose.Schema({
       type: String,
       required: [true, 'Phone is required'],
       unique: true,
+      trim: true,
       match: [/^[6-9]\d{9}$/, 'Enter a valid 10-digit Indian mobile number'],
     },
-    password: { 
-        type: String, 
-        required: true, 
-        minlength: 6, 
-        select: false 
+    password: {
+        type: String,
+        required: true,
+        minlength: 6,
+        select: false
     }, // never returned by default
-    role: {
-      type: String,
-      enum: ['customer', 'electrician', 'admin'],
-      default: 'customer',
-      index: true,
-    },
-    coverImage:{
-        type:String
-    },
-    avatar: { 
-        type: String 
-    }, // image URL
-
-    isPhoneVerified: { 
-        type: Boolean, 
-        default: false 
-    },
-    isActive: { 
-        type: Boolean, 
-        default: true 
-    }, // admin can block a user
-    lastLoginAt: { 
-        type: Date 
-    },
-    // Password reset / OTP support
-    isEmailVerified: {
-        type: Boolean,
-        default: false
-    },
 
     isPhoneVerified: {
         type: Boolean,
         default: false
     },
- 
-    // Admin 2FA (only used when role === 'admin')
-    twoFactorSecret: { type: String, select: false },
+    isEmailVerified: {
+        type: Boolean,
+        default: false
+    },
+    isActive: {
+        type: Boolean,
+        default: true
+    }, // admin can block a user
+    lastLoginAt: {
+        type: Date
+    },
 
     refreshToken: { type: String },
 
@@ -76,7 +51,7 @@ userSchema.pre("save",async function () {
     if(!this.isModified("password")) return ;
 
     this.password = await bcrypt.hash(this.password,10);
-    
+
 })
 userSchema.methods.isPasswordCorrect=async function (password) {
     return await bcrypt.compare(password,this.password)
@@ -86,8 +61,8 @@ userSchema.methods.generateAccessToken=function(){
         {
             _id:this._id,
             email:this.email,
-            username:this.username,
-            fullName:this.fullName
+            phoneNumber:this.phoneNumber,
+            role:"customer"
         },
         process.env.ACCESS_TOKEN_SECRET,
         {
@@ -100,6 +75,7 @@ userSchema.methods.generateRefreshToken=function(){
  return jwt.sign(
         {
             _id:this._id,
+            role:"customer"
         },
         process.env.REFRESH_TOKEN_SECRET,
         {
@@ -109,4 +85,5 @@ userSchema.methods.generateRefreshToken=function(){
 
 }
 
+// Model name kept as "User" so existing accounts in the "users" collection keep working
 export const User=mongoose.model("User",userSchema)
