@@ -19,6 +19,32 @@ export const ELECTRICIAN_SKILLS = [
     "general_inspection",
 ];
 
+export const ELECTRICIAN_LANGUAGES = ["hindi", "english", "punjabi", "bengali", "marathi", "tamil", "telugu", "gujarati", "kannada", "malayalam", "other"];
+
+// Fields customers are allowed to see on an electrician's profile
+export const ELECTRICIAN_PUBLIC_FIELDS = [
+    "fullName",
+    "gender",
+    "avatar",
+    // "bio",
+    "experienceYears",
+    "skills",
+    "languages",
+    "visitingCharge",
+    "address.city",
+    "address.state",
+    "isAvailable",
+    "verificationStatus",
+    "completedJobs",
+    "rating",
+].join(" ");
+
+// The profile row is created at register with only fullName.
+// Everything marked requiredOnSubmit must be filled when the electrician submits the profile form.
+function requiredOnSubmit() {
+    return this.isProfileComplete;
+}
+
 // ID cards / KYC documents uploaded by the electrician
 const idCardSchema = new mongoose.Schema({
     cardType: {
@@ -31,13 +57,11 @@ const idCardSchema = new mongoose.Schema({
         trim: true,
         select: false
     },
-    frontImage: {
+    cardImage: {
         type: String,
         required: true
     }, // image URL
-    backImage: {
-        type: String
-    },
+
     status: {
         type: String,
         enum: ["pending", "approved", "rejected"],
@@ -56,16 +80,11 @@ const electricianProfileSchema = new mongoose.Schema({
     // ---------- Identity ----------
     auth: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "ElectricianAuth",
+        ref: "Electrician",
         required: true,
         unique: true
     }, // phone, email, password live here
-    electricianId: {
-        type: String,
-        unique: true,
-        uppercase: true,
-        trim: true
-    }, // human-readable id e.g. ELE-482913, auto-generated
+
     fullName: {
         type: String,
         required: true,
@@ -74,18 +93,29 @@ const electricianProfileSchema = new mongoose.Schema({
     },
     gender: {
         type: String,
-        enum: ["male", "female", "other"]
+        enum: ["male", "female", "other"],
+        required: [requiredOnSubmit, "Gender is required"]
     },
-    dateOfBirth: {
-        type: Date
+    date_of_birth: {
+        type: Date,
+        required: [requiredOnSubmit, "Date of birth is required"],
+        validate: [
+            (v) => !v || v <= new Date(new Date().setFullYear(new Date().getFullYear() - 18)),
+            "Electrician must be at least 18 years old"
+        ]
     },
     avatar: {
-        type: String
+        type: String,
+        required: [requiredOnSubmit, "Profile photo is required"]
     }, // image URL
     bio: {
         type: String,
         trim: true,
         maxlength: 500
+    },
+    languages: {
+        type: [{ type: String, enum: ELECTRICIAN_LANGUAGES }],
+        default: []
     },
 
     // ---------- Work ----------
@@ -93,40 +123,20 @@ const electricianProfileSchema = new mongoose.Schema({
         type: Number,
         min: 0,
         max: 60,
-        default: 0
+        required: [requiredOnSubmit, "Experience is required"]
     },
-    skills: {
-        type: [{ type: String, enum: ELECTRICIAN_SKILLS }],
-        default: []
-    },
-    visitingCharge: {
-        type: Number,
-        min: 0,
-        default: 0
-    }, // base inspection fee in INR
-
+    
     // ---------- Address ----------
     address: {
-        line1: { type: String, trim: true },
+        line1: { type: String, trim: true, required: [requiredOnSubmit, "Address line 1 is required"] },
         line2: { type: String, trim: true },
         landmark: { type: String, trim: true },
-        city: { type: String, trim: true, index: true },
-        state: { type: String, trim: true },
+        city: { type: String, trim: true, index: true, required: [requiredOnSubmit, "City is required"] },
+        state: { type: String, trim: true, required: [requiredOnSubmit, "State is required"] },
         pincode: {
             type: String,
-            match: [/^\d{6}$/, "Enter a valid 6-digit pincode"]
-        },
-    },
-    // GeoJSON point for "electricians near me", coordinates are [longitude, latitude]
-    location: {
-        type: {
-            type: String,
-            enum: ["Point"]
-        },
-        coordinates: {
-            type: [Number],
-            default: undefined,
-            validate: [(v) => !v || v.length === 2, "Coordinates must be [lng, lat]"]
+            match: [/^\d{6}$/, "Enter a valid 6-digit pincode"],
+            required: [requiredOnSubmit, "Pincode is required"]
         },
     },
 
@@ -145,7 +155,11 @@ const electricianProfileSchema = new mongoose.Schema({
     // ---------- ID cards / verification ----------
     idCards: {
         type: [idCardSchema],
-        default: []
+        default: [],
+        validate: [
+            function (v) { return !this.isProfileComplete || v.length > 0; },
+            "Upload at least one ID card"
+        ]
     },
     verificationStatus: {
         type: String,
@@ -155,9 +169,18 @@ const electricianProfileSchema = new mongoose.Schema({
     },
     verifiedBy: {
         type: mongoose.Schema.Types.ObjectId,
-        ref: "AdminAuth"
+        ref: "Admin"
     },
     verifiedAt: {
+        type: Date
+    },
+
+    // ---------- Profile form ----------
+    isProfileComplete: {
+        type: Boolean,
+        default: false
+    }, // true once the electrician has submitted the profile form
+    profileCompletedAt: {
         type: Date
     },
 
@@ -212,37 +235,21 @@ const electricianProfileSchema = new mongoose.Schema({
 
 }, { timestamps: true });
 
-electricianProfileSchema.index({ location: "2dsphere" });
-
 electricianProfileSchema.pre("validate", function () {
-    if (!this.electricianId) {
-        this.electricianId = `ELE-${randomInt(100000, 1000000)}`;
-    }
+    // if (!this.electricianId) {
+    //     this.electricianId = `ELE-${randomInt(100000, 1000000)}`;
+    // }
     if (this.isModified("isAvailable")) {
         this.availabilityUpdatedAt = new Date();
+    }
+    if (this.isModified("isProfileComplete") && this.isProfileComplete && !this.profileCompletedAt) {
+        this.profileCompletedAt = new Date();
     }
 });
 
 // Can a customer/admin assign a job to this electrician?
 electricianProfileSchema.methods.canBeAssigned = function () {
-    return this.isAvailable && this.verificationStatus === "verified";
-};
-
-// Verified + available electricians near the customer. lng/lat are the customer's coordinates.
-electricianProfileSchema.statics.findAvailableNearby = function ({ lng, lat, skill, maxDistanceKm = 15, limit = 20 }) {
-    const query = {
-        isAvailable: true,
-        verificationStatus: "verified",
-        location: {
-            $near: {
-                $geometry: { type: "Point", coordinates: [lng, lat] },
-                $maxDistance: maxDistanceKm * 1000,
-            },
-        },
-    };
-    if (skill) query.skills = skill;
-
-    return this.find(query).limit(limit);
+    return this.isProfileComplete && this.isAvailable && this.verificationStatus === "verified";
 };
 
 export const ElectricianProfile = mongoose.model("ElectricianProfile", electricianProfileSchema);

@@ -1,12 +1,12 @@
-import { Electrician } from "../model/auth/electrician.auth.model.js"
-import { ElectricianProfile } from "../model/Profile/electricianProfile.model.js";
-import { ApiError } from "../utils/ApiError.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
-import asyncHandler from "../utils/asyncHandler.js"
-import { Verification } from "../model/auth/OTP_verification.model.js";
+import { Admin } from "../../model/auth/admin.auth.model.js"
+import { AdminProfile } from "../../model/Profile/adminProfile.model.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
+import asyncHandler from "../../utils/asyncHandler.js"
+import { Verification } from "../../model/auth/OTP_verification.model.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import { sendEmail } from "../utils/sendEmail.js";
+import { sendEmail } from "../../utils/sendEmail.js";
 
 const VERIFICATION_CODE_EXPIRY_MS=10*60*1000 // 10 min
 const MAX_VERIFICATION_ATTEMPTS=5
@@ -19,15 +19,15 @@ const isCodeMatch=(code,storedHash)=>{
     return a.length===b.length && crypto.timingSafeEqual(a,b);
 }
 
-const generateAccessAndRefereshToken=async(electricianId)=>{
+const generateAccessAndRefereshToken=async(adminId)=>{
     try {
-        const electrician=await Electrician.findById(electricianId);
-        const accessToken=electrician.generateAccessToken();
-        const refreshToken=electrician.generateRefreshToken();
+        const admin=await Admin.findById(adminId);
+        const accessToken=admin.generateAccessToken();
+        const refreshToken=admin.generateRefreshToken();
 
-        electrician.refreshToken=refreshToken;
+        admin.refreshToken=refreshToken;
 
-        await electrician.save({validateBeforeSave:false})
+        await admin.save({validateBeforeSave:false})
 
         return {accessToken,refreshToken};
     } catch (error) {
@@ -35,9 +35,9 @@ const generateAccessAndRefereshToken=async(electricianId)=>{
     }
 }
 
-const electricianRegister = asyncHandler(async (req, res) => {
+const adminRegister = asyncHandler(async (req, res) => {
 
-    const { fullName, email, phoneNumber, password } = req.body || {};
+    const { fullName, email, phoneNumber, password, designation } = req.body || {};
 
     if (!fullName || !phoneNumber || !password) {
         throw new ApiError(400, "All required fields must be provided");
@@ -45,21 +45,21 @@ const electricianRegister = asyncHandler(async (req, res) => {
 
     const normalizedEmail = email?.trim().toLowerCase();
 
-    const existingElectrician = await Electrician.findOne({
+    const existingAdmin = await Admin.findOne({
         $or: [
             { phoneNumber },
             ...(normalizedEmail ? [{ email: normalizedEmail }] : [])
         ]
     });
 
-    if (existingElectrician) {
+    if (existingAdmin) {
         throw new ApiError(
             409,
-            "Electrician with this email or phone number already exists"
+            "Admin with this email or phone number already exists"
         );
     }
 
-    const electrician = await Electrician.create({
+    const admin = await Admin.create({
         email: normalizedEmail,
         phoneNumber,
         password
@@ -67,56 +67,56 @@ const electricianRegister = asyncHandler(async (req, res) => {
 
     let profile;
     try {
-        profile = await ElectricianProfile.create({ auth: electrician._id, fullName });
+        profile = await AdminProfile.create({ auth: admin._id, fullName, designation });
     } catch (error) {
         // don't leave a login without a profile
-        await Electrician.deleteOne({ _id: electrician._id });
+        await Admin.deleteOne({ _id: admin._id });
         throw error;
     }
 
-    const registeredElectrician = await Electrician.findById(electrician._id)
+    const registeredAdmin = await Admin.findById(admin._id)
         .select("-password -refreshToken");
 
     return res.status(201).json(
         new ApiResponse(
             201,
-            { electrician: registeredElectrician, profile },
-            "Electrician registered successfully"
+            { admin: registeredAdmin, profile },
+            "Admin registered successfully"
         )
     );
 });
 
-const electricianLogin=asyncHandler(async(req,res)=>{
+const adminLogin=asyncHandler(async(req,res)=>{
     const {userId,password}=req.body || {};
     if(!(userId && password)){
         throw new ApiError(400,"all the credential are required")
     }
     const loginId=userId.trim();
-    const electrician= await Electrician.findOne({
+    const admin= await Admin.findOne({
         $or:[
             {email:loginId?.toLowerCase()},
             {phoneNumber:loginId}
         ]
     }).select("+password")
-    if(!electrician){
-        throw new ApiError(404,"Electrician does not exist")
+    if(!admin){
+        throw new ApiError(404,"Admin does not exist")
     }
-    const isPasswordValid=await electrician.isPasswordCorrect(password)
+    const isPasswordValid=await admin.isPasswordCorrect(password)
 
     if(!isPasswordValid){
         throw new ApiError(401,"Invalid Credentials")
     }
-    if(!electrician.isActive){
+    if(!admin.isActive){
         throw new ApiError(403,"Your account has been blocked, contact support")
     }
-    const {accessToken,refreshToken}=await generateAccessAndRefereshToken(electrician._id);
+    const {accessToken,refreshToken}=await generateAccessAndRefereshToken(admin._id);
 
-    const loggedInElectrician=await Electrician.findByIdAndUpdate(
-        electrician._id,
+    const loggedInAdmin=await Admin.findByIdAndUpdate(
+        admin._id,
         {lastLoginAt:new Date()},
         {new:true}
     ).select("-password -refreshToken")
-    const profile=await ElectricianProfile.findOne({auth:electrician._id})
+    const profile=await AdminProfile.findOne({auth:admin._id})
 
     const options={
         httpOnly:true,
@@ -128,15 +128,15 @@ const electricianLogin=asyncHandler(async(req,res)=>{
                 .cookie("refreshToken",refreshToken,options)
                 .json(new ApiResponse(200,
                     {
-                        electrician:loggedInElectrician,
+                        admin:loggedInAdmin,
                         profile
                     },
-                    "electrician logged in successfully"
+                    "admin logged in successfully"
                 ))
 })
 
-const electricianLogout=asyncHandler(async(req,res)=>{
-    await Electrician.findByIdAndUpdate(req.user._id,
+const adminLogout=asyncHandler(async(req,res)=>{
+    await Admin.findByIdAndUpdate(req.user._id,
         {
             $unset:{
                 refreshToken:1
@@ -152,30 +152,30 @@ const electricianLogout=asyncHandler(async(req,res)=>{
     return res.status(200)
             .clearCookie("accessToken",option)
             .clearCookie("refreshToken",option)
-            .json(new ApiResponse(200,{},"Electrician logged out successfully"))
+            .json(new ApiResponse(200,{},"Admin logged out successfully"))
 })
 
-const changeElectricianPassword=asyncHandler(async(req,res)=>{
+const changeAdminPassword=asyncHandler(async(req,res)=>{
     const {newPassword,oldPassword}=req.body || {};
     if(!(newPassword && oldPassword)){
         throw new ApiError(400,"enter the credential for update the password")
     }
 
-    const electrician = await Electrician.findById(req.user._id).select("+password");
+    const admin = await Admin.findById(req.user._id).select("+password");
 
-    const isPasswordCorrect=await electrician.isPasswordCorrect(oldPassword);
+    const isPasswordCorrect=await admin.isPasswordCorrect(oldPassword);
 
     if(!isPasswordCorrect){
         throw new ApiError(400,"invalid old password")
     }
-    electrician.password=newPassword;
-    await electrician.save({validateBeforeSave:false})
+    admin.password=newPassword;
+    await admin.save({validateBeforeSave:false})
 
     return res.status(200)
             .json(new ApiResponse(200,{},"password updated successfully"))
 })
 
-const refreshElectricianToken = asyncHandler(async (req, res) => {
+const refreshAdminToken = asyncHandler(async (req, res) => {
     const incomingRefreshToken = req.cookies?.refreshToken || req.body?.refreshToken
     if (!incomingRefreshToken) {
         throw new ApiError(401, "unauthorized request")
@@ -184,16 +184,15 @@ const refreshElectricianToken = asyncHandler(async (req, res) => {
     try {
         const decodedToken = jwt.verify(incomingRefreshToken, process.env.REFRESH_TOKEN_SECRET)
 
-        if (decodedToken?.role !== "electrician") {
+        if (decodedToken?.role !== "admin") {
             throw new ApiError(401, "invalid refresh token")
         }
 
-        // refreshToken has select:false in the schema
-        const electrician = await Electrician.findById(decodedToken?._id).select("+refreshToken");
-        if (!electrician) {
+        const admin = await Admin.findById(decodedToken?._id);
+        if (!admin) {
             throw new ApiError(401, "invalid refresh token")
         }
-        if (incomingRefreshToken !== electrician?.refreshToken) {
+        if (incomingRefreshToken !== admin?.refreshToken) {
             throw new ApiError(401, "Refresh token is expired or used")
         }
 
@@ -202,7 +201,7 @@ const refreshElectricianToken = asyncHandler(async (req, res) => {
             secure: true
         }
 
-        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefereshToken(electrician._id)
+        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefereshToken(admin._id)
 
         return res.status(200)
             .cookie("accessToken", accessToken, options)
@@ -213,14 +212,14 @@ const refreshElectricianToken = asyncHandler(async (req, res) => {
     }
 })
 
-const getCurrentElectrician=asyncHandler(async(req,res)=>{
-    const profile=await ElectricianProfile.findOne({auth:req.user._id})
+const getCurrentAdmin=asyncHandler(async(req,res)=>{
+    const profile=await AdminProfile.findOne({auth:req.user._id})
     return res
     .status(200)
-    .json(new ApiResponse(200 ,{electrician:req.user,profile},"current electrician fetched succesfully"))
+    .json(new ApiResponse(200 ,{admin:req.user,profile},"current admin fetched succesfully"))
 })
 
-const electricianForgotPassword = asyncHandler(async (req, res) => {
+const adminForgotPassword = asyncHandler(async (req, res) => {
 
     const { email } = req.body || {};
 
@@ -230,7 +229,7 @@ const electricianForgotPassword = asyncHandler(async (req, res) => {
 
     const normalizedEmail = email.trim().toLowerCase();
 
-    const electrician = await Electrician.findOne({ email: normalizedEmail });
+    const admin = await Admin.findOne({ email: normalizedEmail });
 
     const response = new ApiResponse(
         200,
@@ -239,7 +238,7 @@ const electricianForgotPassword = asyncHandler(async (req, res) => {
     );
 
     // Don't reveal whether the account exists
-    if (!electrician) {
+    if (!admin) {
         return res.status(200).json(response);
     }
 
@@ -268,7 +267,7 @@ const electricianForgotPassword = asyncHandler(async (req, res) => {
 
     try {
         await sendEmail({
-            to: electrician.email,
+            to: admin.email,
             subject: "Password Reset Verification Code",
             text: `Your verification code is ${code}. It expires in 10 minutes.`,
             html: `
@@ -289,7 +288,7 @@ const electricianForgotPassword = asyncHandler(async (req, res) => {
     return res.status(200).json(response);
 });
 
-const electricianResetPassword = asyncHandler(async (req, res) => {
+const adminResetPassword = asyncHandler(async (req, res) => {
 
     const { email, code, newPassword } = req.body || {};
 
@@ -308,9 +307,9 @@ const electricianResetPassword = asyncHandler(async (req, res) => {
 
     const normalizedEmail = String(email).trim().toLowerCase();
 
-    const electrician = await Electrician.findOne({ email: normalizedEmail });
+    const admin = await Admin.findOne({ email: normalizedEmail });
 
-    if (!electrician) {
+    if (!admin) {
         throw new ApiError(400, "Invalid or expired verification code");
     }
 
@@ -336,12 +335,12 @@ const electricianResetPassword = asyncHandler(async (req, res) => {
     }
 
     // Pre-save hook hashes the new password
-    electrician.password = newPassword;
+    admin.password = newPassword;
 
     // Invalidate existing sessions
-    electrician.refreshToken = undefined;
+    admin.refreshToken = undefined;
 
-    await electrician.save();
+    await admin.save();
 
     // Delete used verification code
     await Verification.deleteOne({ _id: verification._id });
@@ -357,12 +356,12 @@ const electricianResetPassword = asyncHandler(async (req, res) => {
 
 
 export {
-    electricianRegister,
-    electricianLogin,
-    electricianLogout,
-    changeElectricianPassword,
-    refreshElectricianToken,
-    getCurrentElectrician,
-    electricianForgotPassword,
-    electricianResetPassword
+    adminRegister,
+    adminLogin,
+    adminLogout,
+    changeAdminPassword,
+    refreshAdminToken,
+    getCurrentAdmin,
+    adminForgotPassword,
+    adminResetPassword
 };

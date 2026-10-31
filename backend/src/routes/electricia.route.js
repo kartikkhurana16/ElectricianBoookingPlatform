@@ -9,7 +9,11 @@ import {
     electricianForgotPassword,
     electricianResetPassword
 
-} from "../controller/electrician.controller.js"
+} from "../controller/auth/electrician.controller.js"
+import {
+    saveElectricianProfile,
+    getElectricianProfile
+} from "../controller/Profile/electrician.profile.js"
 import { verifyJWT,allowRoles } from "../middleware/auth.middleware.js";
 
 const electricianRouter=Router();
@@ -21,6 +25,9 @@ electricianRouter.route("/current-user").get(verifyJWT, allowRoles("electrician"
 electricianRouter.route("/refresh-token").post(refreshElectricianToken);
 electricianRouter.route("/forgot-password").post(electricianForgotPassword);
 electricianRouter.route("/reset-password").post(electricianResetPassword);
+
+electricianRouter.route("/profile").put(verifyJWT, allowRoles("electrician"), saveElectricianProfile);
+electricianRouter.route("/profile/:profileId").get(verifyJWT, allowRoles("customer", "admin", "electrician"), getElectricianProfile);
 
 
 export default electricianRouter;

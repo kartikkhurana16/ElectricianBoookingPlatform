@@ -7,10 +7,11 @@ import {
     refreshTokenAccess,
     getCurrentUser,
     forgotPassword,
-    resetPassword
-
-} from "../controller/user.controller.js"
+    resetPassword,
+} from "../controller/auth/user.controller.js"
 import { verifyJWT ,allowRoles} from "../middleware/auth.middleware.js";
+import { saveUserProfile } from "../controller/Profile/user.profile.js"
+
 
 const userRouter=Router();
 
@@ -22,5 +23,7 @@ userRouter.route("/current-user").get(verifyJWT, allowRoles("customer"), getCurr
 userRouter.route("/refresh-token").post(refreshTokenAccess);
 userRouter.route("/forgot-password").post(forgotPassword);
 userRouter.route("/reset-password").post(resetPassword);
+
+userRouter.route("/user-profile").post(verifyJWT,allowRoles("customer"),saveUserProfile)
 
 export default userRouter;

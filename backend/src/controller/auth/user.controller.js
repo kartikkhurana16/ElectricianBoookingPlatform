@@ -1,13 +1,15 @@
-import { User } from "../model/auth/user.auth.model.js";
-import { UserProfile } from "../model/Profile/userProfile.model.js";
-import { ApiError } from "../utils/ApiError.js";
-import { ApiResponse } from "../utils/ApiResponse.js";
+import { User } from "../../model/auth/user.auth.model.js";
+import { UserProfile } from "../../model/Profile/userProfile.model.js";
+import { ApiError } from "../../utils/ApiError.js";
+import { ApiResponse } from "../../utils/ApiResponse.js";
 import cookieParser from "cookie-parser";
-import asyncHandler from "../utils/asyncHandler.js"
-import { Verification } from "../model/auth/OTP_verification.model.js";
+import asyncHandler from "../../utils/asyncHandler.js"
+import { Verification } from "../../model/auth/OTP_verification.model.js";
 import crypto from "crypto";
 import jwt from "jsonwebtoken";
-import { sendEmail } from "../utils/sendEmail.js";
+import { sendEmail } from "../../utils/sendEmail.js";
+
+
 const VERIFICATION_CODE_EXPIRY_MS=10*60*1000 // 10 min
 const MAX_VERIFICATION_ATTEMPTS=5
 

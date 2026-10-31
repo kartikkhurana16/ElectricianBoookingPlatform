@@ -9,7 +9,7 @@ import {
     adminForgotPassword,
     adminResetPassword
 
-} from "../controller/admin.controller.js"
+} from "../controller/auth/admin.controller.js"
 import { verifyJWT ,allowRoles} from "../middleware/auth.middleware.js";
 
 const adminRouter=Router();
